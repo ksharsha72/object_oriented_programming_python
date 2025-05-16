@@ -1,49 +1,121 @@
+import iso6346
+
+
 class ShippingContainer:
+
+    HEIGHT_FT=8.5
+    WIDTH_FT=8.0
 
     next_serial = 1337
 
-    def _generate_serial(self):
-        result = ShippingContainer.next_serial
-        ShippingContainer.next_serial += 1
+    @classmethod
+    def _generate_serial(cls):
+        result = cls.next_serial
+        cls.next_serial += 1
         return result
+    
+    @staticmethod
+    def _make_bic_code(owner_code,serial):
+        return iso6346.create(
+            owner_code=owner_code,
+            serial = str(serial).zfill(6)
+        )
+
+    
+    @classmethod
+    def create_empty(cls, owner_code, length_ft, **kwargs):
+        return cls(owner_code, length_ft, contents=[], **kwargs)
+    
+    
+    @classmethod
+    def create_with_items(cls, owner_code, length_ft, items, **kwargs):
+        return cls(owner_code, length_ft, contents = list(items),**kwargs)
 
 
-    def __init__(self, owner_code, contents):
+    def __init__(self, owner_code, contents, length_ft, **kwargs):
         self.owner_code = owner_code
+        self.length_ft = length_ft
         self.contents = contents
-        self.serial = ShippingContainer.next_serial
-        # self.serial += self.next_serial += doesnt create a new instance variable
-        ShippingContainer.next_serial += 1
+        self.bic_code = self._make_bic_code(owner_code=owner_code,
+                                                         serial=ShippingContainer._generate_serial())
+        
+    @property
+    def volume_ft3(self):
+        return self._calc_volume()
+    
+    def _calc_volume(self):
+        return ShippingContainer.HEIGHT_FT * ShippingContainer.WIDTH_FT * self.length_ft
+        
 
+class RefrigeratedShippingContainer(ShippingContainer):
 
+    MAX_CELSIUS = 4.0
+    FRIDGE_VOLUME_FT3 = 100
 
-#LEGB, class doesnt introduce scope in python
-# Local  --> Inside the current fucntion
-# Enclosing --> Inside Enclosing Functions
-# Global --> At top level of the module
-# Built-in --> In the special built in modules
+    def __init__(self,owner_code, length_ft, contents, *, celsius, **kwargs):
+        super().__init__(owner_code, length_ft, contents)    
+        self.celsius = celsius
 
-class MyClass:
+    @staticmethod
+    def _c_to_f(celsius):
+        return celsius * 9/5 + 32
+    
+    @staticmethod
+    def _f_to_c(fahrenheit):
+        return (fahrenheit - 32) * 5/9
 
-    b = "onclass"
+    @property
+    def celsius(self):
+        return self._celsius
+    
+    @celsius.setter
+    def celsius(self, value):
+        self._set_celsius(value)
 
-    def __init__(self):
-        self.a = "oninstance"
+    def _set_celsius(self,value):
+        if value > RefrigeratedShippingContainer.MAX_CELSIUS:
+            raise ValueError("Temperature Too hot")
+        self._celsius = value
 
-        print(self.a)
+    @property
+    def fahrenheit(self):
+        return RefrigeratedShippingContainer._c_to_f(self.celsius)
+    
+    @fahrenheit.setter
+    def fahrenheit(self, value):
+        self.celsius = RefrigeratedShippingContainer._f_to_c(value)
 
-        print(MyClass.b)
+    
+    def _calc_volume(self):
+        super()._calc_volume() - RefrigeratedShippingContainer.FRIDGE_VOLUME_FT3 
+        # return (self.length_ft * ShippingContainer.HEIGHT_FT * ShippingContainer.WIDTH_FT - RefrigeratedShippingContainer.FRIDGE_VOLUME_FT3)
 
-        print(self.b) #--> access class attribute, since there is no instance attribute
+    @staticmethod
+    def _make_bic_code(owner_code, serial):
+        return iso6346.create(
+            owner_code=owner_code,
+            serial = str(serial).zfill(6),
+            category="R"
+        )
+    
 
-        self.a = "re-bound" # --> rebinds the existing instance attribute 
-        self.b  = "new on instance"  # --> instance attribute hides the class attribute, instance attribue takes precedence over class attribute
+class HeatedRefrigeratedShippingContainer(RefrigeratedShippingContainer):
 
-        print(self.b) # --> access the instance attribute
+    MIN_CELSIUS = -20
 
+    # celsius decoratore derived is not visible in the scope of the class
+    # @celsius.setter  
+    @RefrigeratedShippingContainer.celsius.setter
+    def _set_celsius(self, value):
+        # if not (
+        #     HeatedRefrigeratedShippingContainer.MIN_CELSIUS
+        #     <= value
+        #     <= RefrigeratedShippingContainer.MAX_CELSIUS
+        # ):
+        #     raise ValueError("Temperature out of range")
 
-
-
-
-
-
+        if value < HeatedRefrigeratedShippingContainer.MIN_CELSIUS:
+            raise ValueError("Temperature Too Cold")
+        
+        # super().celsius = value
+        super()._set_celsius(self, value)
